@@ -2,7 +2,7 @@
 
 An advanced, autonomous reasoning agent that ingests market data, analyzes user portfolios, and generates causal explanations linking macro news to sector trends to individual stock performances. Built with FastAPI, LangChain, and Langfuse for observability.
 
-## 🚀 Quick Start
+## Quick Start
 
 1. **Clone the repository** (if not already done) and enter the directory.
 
@@ -37,7 +37,7 @@ An advanced, autonomous reasoning agent that ingests market data, analyzes user 
    curl -s http://127.0.0.1:8000/api/v1/analyze_portfolio/PORTFOLIO_002 | python3 -m json.tool
    ```
 
-## 🏗 Architecture & Modularity
+## Architecture & Modularity
 
 The repository is structured to mirror a professional production service, adhering strictly to clean code design principles.
 
@@ -62,14 +62,14 @@ stealth-advisor-agent/
 └── requirements.txt       # Dependencies
 ```
 
-## 🧠 The Reasoning Layer
+## The Reasoning Layer
 
 This agent goes far beyond data dumping. Using advanced prompt engineering, it is strictly forced to execute **causal linking**:
 `Macro News -> Sector Trends -> Individual Stock Performance -> User Portfolio Impact`. 
 
 The news is pre-filtered dynamically in Python (via `NewsProcessor`) to ensure the LLM only reasons over `HIGH`/`MEDIUM` impact news that explicitly match the user's holdings or sector exposure, drastically reducing token usage and hallucinations.
 
-## 📊 Self-Evaluation & Observability
+## Self-Evaluation & Observability
 
 - **Observability**: Fully integrated with **Langfuse**. The `@observe()` decorator tracks functions across the pipeline, and the `langfuse_context.flush()` ensures traces are safely pushed before the thread dies.
 - **Evaluation Layer**: After the briefing is generated, a completely decoupled `SelfEvaluator` agent (running on a stricter model with `temperature=0.0`) grades the output on a scale of 1-5. It checks for deep causal reasoning and explicitly flags any factual inconsistencies.
