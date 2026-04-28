@@ -44,6 +44,8 @@ class FinancialAdvisorAgent:
         risk_warnings: Optional[str],
         macro_sentiment: str,
         relevant_news: List[NewsArticle],
+        sector_trends: Optional[dict[str, dict[str, Any]]] = None,
+        stock_sector_divergences: Optional[list[dict[str, Any]]] = None,
     ) -> AgentBriefing:
         if ChatPromptTemplate is None:
             raise RuntimeError(
@@ -64,13 +66,16 @@ class FinancialAdvisorAgent:
             "Output rules:\n"
             "- Return a JSON that matches the provided schema exactly.\n"
             "- executive_summary must be exactly 2 sentences.\n"
-            "- populate 'causal_links' with the macro->sector->stock chain.\n"
+            "- populate 'causal_links' with the macro->sector->stock chain using keys: macro_event, sector, stock, portfolio_impact.\n"
+            "- If Stock vs Sector divergences are provided, mention each of them in conflicts_resolved using keys: stock, explanation.\n"
         )
 
         human_prompt = (
             "Portfolio context (JSON):\n{portfolio_json}\n\n"
             "Daily P&L (JSON):\n{daily_pnl_json}\n\n"
             "Sector allocation (percent weights, JSON):\n{sector_allocation_json}\n\n"
+            "Sector trends (JSON):\n{sector_trends_json}\n\n"
+            "Stock vs sector divergences (JSON):\n{stock_sector_divergences_json}\n\n"
             "Macro sentiment:\n{macro_sentiment}\n\n"
             "Risk warnings (optional):\n{risk_warnings}\n\n"
             "Relevant news (JSON list):\n{news_json}\n\n"
@@ -95,6 +100,8 @@ class FinancialAdvisorAgent:
                 }
             ),
             "sector_allocation_json": self._to_pretty_json(sector_allocation),
+            "sector_trends_json": self._to_pretty_json(sector_trends or {}),
+            "stock_sector_divergences_json": self._to_pretty_json(stock_sector_divergences or []),
             "macro_sentiment": macro_sentiment,
             "risk_warnings": risk_warnings or "",
             "news_json": self._to_pretty_json([self._safe_dump(a) for a in relevant_news]),
@@ -113,14 +120,14 @@ class FinancialAdvisorAgent:
             chain = prompt | structured_llm
             
             # 1. Run the LLM
-            result = chain.invoke(inputs, config=config) 
+            result = chain.invoke(inputs, config=config)
             
             # 2. FORCE the trace to upload before returning!
             if handler is not None:
                 handler.flush() 
                 
             # 3. Now return the data to the user
-            return result 
+            return self._coerce_briefing(result)
 
         try:
             from langchain_core.output_parsers import PydanticOutputParser
@@ -136,7 +143,7 @@ class FinancialAdvisorAgent:
         result = chain.invoke(inputs, config=config)
         if handler is not None:
             handler.flush()
-        return result
+        return self._coerce_briefing(result)
 
     def _safe_dump(self, obj: Any) -> Any:
         if hasattr(obj, "model_dump"):
@@ -144,6 +151,30 @@ class FinancialAdvisorAgent:
         if hasattr(obj, "dict"):
             return obj.dict()
         return obj
+
+    def _coerce_briefing(self, value: Any) -> AgentBriefing:
+        if isinstance(value, AgentBriefing):
+            return value
+        if isinstance(value, dict):
+            normalized = dict(value)
+            causal_links = normalized.get("causal_links")
+            if isinstance(causal_links, dict):
+                normalized["causal_links"] = [causal_links]
+            elif causal_links is None:
+                normalized["causal_links"] = []
+
+            conflicts_resolved = normalized.get("conflicts_resolved")
+            if isinstance(conflicts_resolved, dict):
+                normalized["conflicts_resolved"] = [conflicts_resolved] if conflicts_resolved else []
+            elif conflicts_resolved is None:
+                normalized["conflicts_resolved"] = []
+
+            return AgentBriefing(**normalized)
+        if hasattr(value, "model_dump"):
+            return AgentBriefing(**value.model_dump())
+        if hasattr(value, "dict"):
+            return AgentBriefing(**value.dict())
+        return AgentBriefing(executive_summary=str(value))
 
     def _to_pretty_json(self, obj: Any) -> str:
         return json.dumps(obj, ensure_ascii=False, indent=2, default=str)

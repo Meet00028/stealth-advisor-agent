@@ -128,22 +128,28 @@ class Portfolio(BaseModel):
 
 class CausalDriver(BaseModel):
     """I implemented this model to capture a single causal chain from macro news to portfolio impact."""
-    macro_event: str
-    sector_impact: str
-    portfolio_impact: str
+    macro_event: str = ""
+    sector: str = ""
+    stock: str = ""
+    portfolio_impact: str = ""
+
+
+class ConflictResolution(BaseModel):
+    stock: str = ""
+    explanation: str = ""
 
 
 class AgentBriefing(BaseModel):
     """I implemented this model to represent the final structured output produced by the reasoning agent."""
     executive_summary: str
     causal_links: List[CausalDriver] = Field(default_factory=list)
-    confidence_score: float = Field(ge=0.0, le=1.0)
-    conflicts_resolved: List[str] = Field(default_factory=list)
+    confidence_score: float = Field(default=0.5, ge=0.0, le=1.0)
+    conflicts_resolved: List[ConflictResolution] = Field(default_factory=list)
     risk_warnings: Optional[str] = None
 
 
 class EvaluationResult(BaseModel):
     """I implemented this model to represent an LLM-based evaluation of the agent's reasoning quality."""
-    reasoning_score: int = Field(ge=1, le=5)
+    reasoning_score: int = Field(default=3, ge=1, le=5)
     factual_inconsistencies: List[str] = Field(default_factory=list)
     feedback: str

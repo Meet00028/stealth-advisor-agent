@@ -76,7 +76,7 @@ class SelfEvaluator:
                 handler.flush() 
                 
             # 3. Now return the data to the user
-            return result 
+            return self._coerce_evaluation(result)
 
         try:
             from langchain_core.output_parsers import PydanticOutputParser
@@ -92,7 +92,7 @@ class SelfEvaluator:
         result = chain.invoke(inputs, config=config)
         if handler is not None:
             handler.flush()
-        return result
+        return self._coerce_evaluation(result)
 
     def _safe_dump(self, obj: Any) -> Any:
         if hasattr(obj, "model_dump"):
@@ -104,3 +104,13 @@ class SelfEvaluator:
     def _to_pretty_json(self, obj: Any) -> str:
         return json.dumps(obj, ensure_ascii=False, indent=2, default=str)
 
+    def _coerce_evaluation(self, value: Any) -> EvaluationResult:
+        if isinstance(value, EvaluationResult):
+            return value
+        if isinstance(value, dict):
+            return EvaluationResult(**value)
+        if hasattr(value, "model_dump"):
+            return EvaluationResult(**value.model_dump())
+        if hasattr(value, "dict"):
+            return EvaluationResult(**value.dict())
+        return EvaluationResult(feedback=str(value))

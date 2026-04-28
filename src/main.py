@@ -84,6 +84,7 @@ def analyze_portfolio(portfolio_id: str) -> Dict[str, Any]:
     news_processor = NewsProcessor(loader)
     trend_analyzer = TrendAnalyzer(loader)
     macro_sentiment = trend_analyzer.get_macro_sentiment()
+    sector_performance = loader.get_sector_performance()
 
     target_sectors = sorted({h.sector for h in portfolio.holdings.stocks})
     target_stocks = sorted({h.symbol for h in portfolio.holdings.stocks})
@@ -93,6 +94,32 @@ def analyze_portfolio(portfolio_id: str) -> Dict[str, Any]:
     target_stocks = sorted(set(target_stocks))
 
     relevant_news = news_processor.filter_relevant_news(target_sectors=target_sectors, target_stocks=target_stocks)
+    sector_trends: Dict[str, Dict[str, Any]] = {}
+    for sector in target_sectors:
+        perf = sector_performance.get(sector)
+        if perf is not None:
+            sector_trends[sector] = {
+                "change_percent": perf.change_percent,
+                "sentiment": perf.sentiment,
+                "key_drivers": perf.key_drivers,
+            }
+
+    stock_sector_divergences: list[dict[str, Any]] = []
+    for holding in portfolio.holdings.stocks:
+        perf = sector_performance.get(holding.sector)
+        if perf is None:
+            continue
+        sector_change = float(perf.change_percent)
+        stock_change = float(holding.day_change_percent)
+        if (sector_change > 0 and stock_change < 0) or (sector_change < 0 and stock_change > 0):
+            stock_sector_divergences.append(
+                {
+                    "symbol": holding.symbol,
+                    "sector": holding.sector,
+                    "stock_change_percent": stock_change,
+                    "sector_change_percent": sector_change,
+                }
+            )
 
     engine = PortfolioAnalyticsEngine(
         portfolio=portfolio, 
@@ -121,6 +148,8 @@ def analyze_portfolio(portfolio_id: str) -> Dict[str, Any]:
         risk_warnings=risk_warnings,
         macro_sentiment=macro_sentiment,
         relevant_news=relevant_news,
+        sector_trends=sector_trends,
+        stock_sector_divergences=stock_sector_divergences,
     )
 
     try:
@@ -148,6 +177,8 @@ def analyze_portfolio(portfolio_id: str) -> Dict[str, Any]:
             },
             "asset_allocation": asset_allocation,
             "sector_allocation": sector_allocation,
+            "sector_trends": sector_trends,
+            "stock_sector_divergences": stock_sector_divergences,
             "risk": concentration_risk,
         },
         "briefing": briefing.model_dump() if hasattr(briefing, "model_dump") else (briefing.dict() if hasattr(briefing, "dict") else briefing),
